@@ -1,0 +1,12 @@
+global:
+  resolve_timeout: 5m
+
+#route:
+#  receiver: "my-webhook"
+
+# receivers:
+#   - name: "my-webhook"
+#     webhook_configs:
+#       - url: "http://alertserver.notyet"
+#         send_resolved: true
+

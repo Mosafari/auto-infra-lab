@@ -1,0 +1,138 @@
+groups:
+####################################################################################################
+#                                              K8S                                                 #    
+####################################################################################################
+
+  - name: k8s-pod-alert
+    interval: 1m
+    rules:
+
+      # 1. Pod Not Ready - Critical
+      - alert: PodNotReady
+        expr: kube_pod_status_ready{condition="true"} == 0
+        for: 10m 
+        labels:
+          severity: critical
+          component: pod
+          team: infra
+        annotations:
+          summary: "Pod not Ready: {{ $labels.namespaces }}/{{ $labels.pod }}"
+          description: "pod {{ $labels.namespace }}/{{ $labels.pod }} is not Ready for > 1m. Ckeck kubelet, events and pod logs."
+
+
+
+      # 2) Pod high restart rate / CrashLooping — warning -> critical
+      - alert: PodHighRestartRate
+        expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: pod
+          team: infra
+        annotations:
+          summary: "High restart rate for {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "Container restarts > 3 in the last 15m. Check logs and OOMs."
+
+      
+      # 3) OOMKilled seen — critical (fire immediately)
+      - alert: PodOOMKilled
+        expr: increase(kube_pod_container_status_terminated_reason{reason="OOMKilled"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: memory
+          team: infra
+        annotations:
+          summary: "OOMKilled in {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "A container in the pod was OOMKilled. Check memory requests/limits and recent memory usage."      
+      
+      # 4) Pod high CPU relative to requests (>80%) — warning
+      - alert: PodHighCPU
+        expr: sum by(namespace,pod) (rate(container_cpu_usage_seconds_total{container!=""}[5m])) / sum by(namespace,pod) (kube_pod_container_resource_requests_cpu_cores) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: cpu
+          team: infra
+        annotations:
+          summary: "High CPU usage for {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "CPU usage > 80% of requested CPU for more than 5m. Consider increasing requests or scaling."
+
+
+      # 5) Pod high Memory relative to requests (>90%) — warning
+      - alert: PodHighMemory
+        expr: sum by(namespace,pod) (container_memory_working_set_bytes{container!=""}) / sum by(namespace,pod) (kube_pod_container_resource_requests_memory_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: memory
+          team: platform
+        annotations:
+          summary: "High Memory usage for {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "Memory usage > 90% of requested memory for more than 5m. Check for memory leaks or increase requests/limits."
+
+      
+      # 6) Pod high HTTP error rate (>5%) — critical (requires http_requests_total)
+      - alert: PodHighHttpErrorRate
+        expr: (sum by(namespace,pod) (increase(http_requests_total{code=~"5..|4.."}[5m])) / sum by(namespace,pod) (increase(http_requests_total[5m]))) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: http
+          team: apps
+        annotations:
+          summary: "High HTTP error rate for {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "HTTP error rate > 5% in last 5m. Check application logs and upstream dependencies."
+       
+  
+      # 7) Image pull problems (ImagePullBackOff / ErrImagePull) — critical
+      - alert: PodImagePullError
+        expr: kube_pod_container_status_waiting_reason{reason=~"ImagePullBackOff|ErrImagePull"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: image
+          team: platform
+        annotations:
+          summary: "Image pull error for {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "Pod has ImagePullBackOff/ErrImagePull. Check image name, registry credentials and network."
+      
+      # 8) Pod evicted (Evicted) — critical
+      - alert: PodEvicted
+        expr: increase(kube_pod_container_status_terminated_reason{reason="Evicted"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: scheduling
+          team: platform
+        annotations:
+          summary: "Pod evicted in {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "Pod eviction detected. Check node resources and eviction reasons (disk/pressure/taints)."       
+
+    
+      # 9) Pod not reporting metrics (no 'up' for pod exporter) — critical for pods with monitoring enabled
+      - alert: PodNotReportingMetrics
+        expr: sum by(namespace,pod) (sum_over_time(up{job="kubernetes-pods"}[10m])) == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: monitoring
+          team: platform
+        annotations:
+          summary: "No metrics from {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "Prometheus has not seen metrics from this pod in last 10m. Check exporter and network."       
+
+
+
+      # 10) Pod filesystem usage high (>90%) — warning
+      - alert: PodFsUsageHigh
+        expr: sum by(namespace,pod) (container_fs_usage_bytes{container!=""}) / sum by(namespace,pod) (container_fs_limit_bytes{container!=""}) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: storage
+          team: platform
+        annotations:
+          summary: "High filesystem usage for {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "Filesystem usage > 90% for more than 5m. Consider cleaning temporary files or increasing storage."    
+

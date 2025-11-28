@@ -38,3 +38,15 @@ kubernetes:
                 httpsport: "32443"
                 state: "join"
                 role: "worker"
+
+
+monitoring_servers:
+  vars:
+    clustername: "arvancluster"
+  hosts:
+    monitoring:
+      ansible_host: 192.168.206.131
+      ansible_user: root
+      vars:
+        address: "192.168.206.131"
+        hostname: "monitoring"

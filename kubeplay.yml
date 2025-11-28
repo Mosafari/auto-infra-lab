@@ -1,10 +1,41 @@
 ---
-- name: deploying arvan cluster
-  hosts: cluster
-  become: true
-  handlers:
-    - import_tasks: handlers/main.yml
-  tasks:
-    - name: Run Kubernetes setup
-      import_tasks: main.yml
+# - name: deploying arvan cluster
+#   hosts: cluster
+#   become: true
+#   handlers:
+#     - import_tasks: handlers/main.yml
+#   tasks:
+#     - name: Run Kubernetes setup
+#       import_tasks: tasks/kuber/main.yml
 
+- name: Install Helm charts and deploy apps
+  hosts: masters
+  become: yes
+  gather_facts: no
+  vars:
+    lb_ip: 192.168.206.128
+    helm_release_name_nginx: ingress-nginx
+    helm_chart_nginx_repo: https://kubernetes.github.io/ingress-nginx
+    helm_chart_nginx_name: ingress-nginx
+    helm_release_name_ksm: kube-state-metrics
+    helm_chart_ksm_repo: https://prometheus-community.github.io/helm-charts
+    helm_chart_ksm_name: kube-state-metrics
+    helm_release_name_postgres: postgres-operator
+    helm_chart_postgres_url: https://github.com/zalando/postgres-operator/releases/download/v1.8.2/postgres-operator-1.8.2.tgz
+    backend_ip: "10.101.129.66"
+    backend_port: "80"
+    domain_suffix: ".arvan.ir"
+
+  tasks:
+    - name: Prepare Master01 
+      import_tasks: tasks/kuber/prepare.yml
+
+# - name: Setup Monitoring Stack
+#   hosts: monitoring_servers
+#   become: yes
+#   vars:
+#     monitoring_dir: "/srv"
+#     lb_ip: 192.168.206.128
+#   tasks:
+#     - name: Prepare Monitoring server
+#       import_tasks: tasks/monitoring/prepare.yml

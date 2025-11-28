@@ -1,65 +1,63 @@
 ---
-- name: Setup Monitoring Stack
-  hosts: monitoring_servers
-  become: yes
-  vars:
-    prometheus_targets:
-      - "192.168.1.10:9090"
-      - "192.168.1.11:9090"
-    grafana_dashboard_file: "custom_dashboard.json"  # local file inside files/
-    monitoring_dir: "/srv/monitoring"
+- name: Set the hostname
+  command: hostnamectl set-hostname {{ hostvars[inventory_hostname]['vars']['hostname'] }}
 
-  tasks:
-    - name: Ensure Podman is installed
-      package:
-        name: podman
-        state: present
+- name: Disable firewalld
+  systemd:
+    name: firewalld
+    enabled: false
+    state: stopped
+    masked: true
 
-    - name: Ensure podman-compose is installed
-      pip:
-        name: podman-compose
-        state: present
+- name: Disable SELinux temporarily
+  command: setenforce 0
+  when: ansible_selinux.status == "enabled"
 
-    - name: Create monitoring directory
-      file:
-        path: "{{ monitoring_dir }}"
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+- name: Permissive SELinux permanently
+  lineinfile:
+    path: /etc/sysconfig/selinux
+    regexp: '^SELINUX='
+    line: 'SELINUX=permissive'
 
-    - name: Copy monitoring files to remote server
-      copy:
-        src: "{{ item }}"
-        dest: "{{ monitoring_dir }}/"
-        owner: root
-        group: root
-        mode: '0644'
-      loop:
-        - "docker-compose.yml"
-        - "prometheus.yml"
-        - "{{ grafana_dashboard_file }}"
+- name: copy hosts
+  template:
+    src: templates/hosts.j2
+    dest: /etc/hosts
 
-    - name: Customize Prometheus config with target IPs
-      lineinfile:
-        path: "{{ monitoring_dir }}/prometheus.yml"
-        regexp: 'targets:.*'
-        line: "  - targets: {{ prometheus_targets | join(',') }}"
-      notify: Restart Monitoring Stack
+- name: Ensure Podman is installed
+  package:
+    name: podman
+    state: present
 
-    - name: Customize Grafana dashboard JSON
-      template:
-        src: "{{ grafana_dashboard_file }}"
-        dest: "{{ monitoring_dir }}/grafana_dashboard.json"
-      notify: Restart Monitoring Stack
+- name: Install python3-pip
+  dnf:
+    name: python3-pip
+    state: present
 
-    - name: Start monitoring stack
-      command: podman-compose up -d
-      args:
-        chdir: "{{ monitoring_dir }}"
+- name: Install podman-compose for the current user
+  shell: |
+    pip3 install --user podman-compose
 
-  handlers:
-    - name: Restart Monitoring Stack
-      command: podman-compose down && podman-compose up -d
-      args:
-        chdir: "{{ monitoring_dir }}"
+- name: Create monitoring directory
+  file:
+    path: "{{ monitoring_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Copy monitoring directory tree
+  copy:
+    src: "files/monitoring"
+    dest: "/srv/"
+    owner: root
+    group: root
+
+- name: Start monitoring stack
+  command: podman-compose up -d
+  args:
+    chdir: "/srv/monitoring"
+
+- name: Apply ingress manifest
+  shell: |
+      echo "{{ lb_ip }}  ksm.arvan.ir" >> /etc/hosts

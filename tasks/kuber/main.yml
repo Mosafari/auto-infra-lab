@@ -40,29 +40,6 @@
     regexp: '^SELINUX='
     line: 'SELINUX=permissive'
 
-# - name: "Copy cert files to anchors"
-#   copy:
-#     src: "files/{{ item }}"
-#     dest: /etc/pki/ca-trust/source/anchors/
-#     mode: '0644'
-#   loop: "{{ cert_files }}"
-
-# - name: "Update CA trust"
-#   command: update-ca-trust
-
-# - name: Remove all repo files from /etc/yum.repos.d/
-#   ansible.builtin.file:
-#     path: "{{ item }}"
-#     state: absent
-#   with_fileglob:
-#     - /etc/yum.repos.d/*.repo
-
-# - name: "Copy YUM repo files"
-#   copy:
-#     src: "files/repos/{{ item }}"
-#     dest: /etc/yum.repos.d/
-#   loop: "{{ yum_repo_files }}"
-
 - name: Install extraction tools (RHEL/CentOS)
   yum:
     name:
