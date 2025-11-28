@@ -1,0 +1,286 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Validate required variables
+  debug:
+    msg: "checking requierd vars"
+  notify: "Ensure required variables are set"
+  changed_when: true
+
+- name: notifying handlers
+  meta: flush_handlers
+
+- name: Turn off swap immediately
+  command: swapoff -a
+  args:
+    warn: false
+
+- name: Remove swap entries from /etc/fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^\s*(.+\s+swap\s+.+)$'
+    replace: '# \1'
+
+- name: Set the hostname
+  command: hostnamectl set-hostname {{ hostvars[inventory_hostname]['vars']['hostname'] }}
+
+- name: Disable firewalld
+  systemd:
+    name: firewalld
+    enabled: false
+    state: stopped
+    masked: true
+
+- name: Disable SELinux temporarily
+  command: setenforce 0
+  when: ansible_selinux.status == "enabled"
+
+- name: Permissive SELinux permanently
+  lineinfile:
+    path: /etc/sysconfig/selinux
+    regexp: '^SELINUX='
+    line: 'SELINUX=permissive'
+
+# - name: "Copy cert files to anchors"
+#   copy:
+#     src: "files/{{ item }}"
+#     dest: /etc/pki/ca-trust/source/anchors/
+#     mode: '0644'
+#   loop: "{{ cert_files }}"
+
+# - name: "Update CA trust"
+#   command: update-ca-trust
+
+# - name: Remove all repo files from /etc/yum.repos.d/
+#   ansible.builtin.file:
+#     path: "{{ item }}"
+#     state: absent
+#   with_fileglob:
+#     - /etc/yum.repos.d/*.repo
+
+# - name: "Copy YUM repo files"
+#   copy:
+#     src: "files/repos/{{ item }}"
+#     dest: /etc/yum.repos.d/
+#   loop: "{{ yum_repo_files }}"
+
+- name: Install extraction tools (RHEL/CentOS)
+  yum:
+    name:
+      - tar
+    state: present
+
+- name: Install runc binary
+  copy:
+    src: "files/runc.amd64"
+    dest: /usr/local/sbin/runc
+    mode: '0755'
+
+- name: Ensure /opt/cni/bin directory exists
+  file:
+    path: /opt/cni/bin
+    state: directory
+    mode: '0755'
+    recurse: yes
+
+- name: Extract CNI plugins
+  unarchive:
+    src: "files/cni-plugins-linux-amd64-v1.8.0.tgz"
+    dest: /opt/cni/bin
+
+
+- name: Extract containerd tar.gz
+  unarchive:
+    src: "files/containerd-2.2.0-linux-amd64.tar.gz"
+    dest: /usr/local
+
+- name: "Prepare containerd config directory"
+  file:
+    path: /etc/containerd
+    state: directory
+
+- name: Extract containerd config
+  copy:
+    src: "files/config.toml"
+    dest: /etc/containerd
+    mode: '0644'
+
+- name: Ensure /usr/local/lib/systemd/system directory exists
+  file:
+    path: /usr/local/lib/systemd/system
+    state: directory
+    mode: '0755'
+    recurse: yes
+
+- name: Install containerd systemd service
+  copy:
+    src: files/containerd.service
+    dest: /usr/local/lib/systemd/system/
+
+- name: Reload and enable containerd
+  systemd:
+    daemon_reload: true
+    name: containerd
+    enabled: true
+    state: started
+
+
+- name: Apply sysctl settings for Kubernetes
+  copy:
+    dest: /etc/sysctl.d/kubernetes.conf
+    content: |
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      net.ipv4.ip_forward = 1
+
+- name: Reload sysctl
+  command: sysctl --system
+
+- name: Extract crictl
+  unarchive:
+    src: "files/crictl-v1.34.0-linux-amd64.tar.gz"
+    dest: /usr/local/bin
+
+
+- name: Make crictl executable
+  file:
+    path: /usr/local/bin/crictl
+    mode: '0755'
+
+
+- name: Create Kubernetes repo
+  copy:
+    dest: /etc/yum.repos.d/kubernetes.repo
+    content: |
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/repodata/repomd.xml.key
+      exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install kubelet, kubeadm, kubectl (YUM/DNF)
+  package:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+    disable_excludes: kubernetes
+
+- name: Ensure /etc/systemd/system/kubelet.service.d/ directory exists
+  file:
+    path: /etc/systemd/system/kubelet.service.d/
+    state: directory
+    mode: '0755'
+    recurse: yes
+
+- name: Reload systemd for kubelet
+  systemd:
+    daemon_reload: true
+    daemon_reexec: true
+    name: kubelet
+    enabled: true
+    state: started
+
+- name: Load required kernel modules
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - br_netfilter
+    - overlay
+
+- name: Ensure modules are loaded on boot
+  copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      br_netfilter
+      overlay
+
+- name: copy hosts
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+
+####################################################
+- name: add /usr/local/bin to $PATH
+  shell: "echo 'export PATH=$PATH:/usr/local/bin/;'  >> /root/.bashrc"
+  when: (hostvars[inventory_hostname]['vars']['role']=='master')
+
+- name: Initialize Kubernetes control plane
+  ansible.builtin.command:
+    argv:
+      - kubeadm 
+      - init
+      - "--control-plane-endpoint={{ hostvars[inventory_hostname]['vars']['address'] }}"
+      - --upload-certs
+      - "--apiserver-advertise-address={{ hostvars[inventory_hostname]['vars']['address'] }}"
+  register: kubeadm_init_result
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init') 
+
+- name: get join command
+  shell: kubeadm token create --print-join-command
+  environment:
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  register: join_command_raw
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init') 
+
+- name: set join command
+  set_fact:
+    join_command: "{{ join_command_raw.stdout_lines[0] }}"
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init')
+
+- name: Get certificate key for control plane join
+  command: kubeadm init phase upload-certs --upload-certs
+  environment:
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  register: cert_key_output
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init') 
+
+- name: Extract certificate key
+  set_fact:
+    cert_key: "{{ cert_key_output.stdout_lines  | last }}"
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init') 
+
+- name: Print var from inventory explicitly
+  debug:
+    msg: "{{ hostvars[groups['masters'][0]]['cert_key'] }}"
+
+- name: Ensure /srv/kuber/manifest directory exists
+  file:
+    path: /srv/kuber/manifest
+    state: directory
+    mode: '0755'
+    recurse: yes
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init')
+
+- name: Copy calico manifest
+  copy:
+    src: "files/{{ calico_yaml }}"
+    dest: "/srv/kuber/manifest/{{ calico_yaml }}"
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init')
+
+- name: Deploy Calico network
+  command: kubectl create -f /srv/kuber/manifest/{{ calico_yaml }}
+  environment:
+    KUBECONFIG: "/etc/kubernetes/admin.conf"
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='init') 
+
+- name: join other masters to the cluster
+  shell: "{{ hostvars[groups['masters'][0]]['join_command'] }} --control-plane  --certificate-key {{ hostvars[groups['masters'][0]]['cert_key'] }} >> node_joined.txt"
+  args:
+    chdir: $HOME
+    creates: node_joined.txt
+  when: (hostvars[inventory_hostname]['vars']['role']=='master') and (hostvars[inventory_hostname]['vars']['state']=='join')
+
+- name: join workers to the cluster
+  shell: "{{ hostvars[groups['masters'][0]]['join_command'] }}  >> node_joined.txt"
+  args:
+    chdir: $HOME
+    creates: node_joined.txt
+  when: hostvars[inventory_hostname]['vars']['role']=='worker'
+

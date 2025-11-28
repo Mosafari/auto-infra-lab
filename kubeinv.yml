@@ -1,0 +1,40 @@
+kubernetes:
+  vars:
+    clustername: "arvancluster"
+    calico_yaml: calico.yaml
+  children:
+    cluster:
+      children:
+        masters:
+          hosts:
+            kmaster1:
+              ansible_host: 192.168.206.128
+              ansible_user: root
+              vars:
+                address: "192.168.206.128"
+                port: "6443"
+                hostname: "arvanmaster01"
+                state: "init"
+                role: "master"
+        workers:
+          hosts:
+            kworker1:
+              ansible_host: 192.168.206.129
+              ansible_user: root
+              vars:
+                address: "192.168.206.129"
+                hostname: "arvanworker01"
+                httpport: "32080"
+                httpsport: "32443"
+                state: "join"
+                role: "worker"
+            kworker2:
+              ansible_host: 192.168.206.130
+              ansible_user: root
+              vars:
+                address: "192.168.206.130"
+                hostname: "arvanworker02"
+                httpport: "32080"
+                httpsport: "32443"
+                state: "join"
+                role: "worker"

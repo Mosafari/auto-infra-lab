@@ -1,0 +1,6 @@
+{% for server in groups['masters'] %}
+{{ hostvars[server]['vars']['address'] }} {{ hostvars[server]['vars']['hostname'] }}.{{ clustername }}.cluster.local {{ hostvars[server]['vars']['hostname'] }}
+{% endfor %}
+{% for server in groups['workers'] %}
+{{ hostvars[server]['vars']['address'] }} {{ hostvars[server]['vars']['hostname'] }}.{{ clustername }}.cluster.local {{ hostvars[server]['vars']['hostname'] }}
+{% endfor %}
