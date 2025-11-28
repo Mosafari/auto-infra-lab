@@ -4804,14 +4804,14 @@
         "skipUrlSync": false,
         "type": "constant",
         "current": {
-          "value": "${VAR_DATASOURCE}",
-          "text": "${VAR_DATASOURCE}",
+          "value": "Prometheus",
+          "text": "Prometheus",
           "selected": false
         },
         "options": [
           {
-            "value": "${VAR_DATASOURCE}",
-            "text": "${VAR_DATASOURCE}",
+            "value": "Prometheus",
+            "text": "Prometheus",
             "selected": false
           }
         ]

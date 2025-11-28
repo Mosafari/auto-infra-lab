@@ -1,77 +1,77 @@
 ---
-# - name: Copy Helm tar.gz to master
-#   copy:
-#     src: "files/helm-v4.0.0-linux-amd64.tar.gz"
-#     dest: "/tmp/helm.tar.gz"
-#     mode: "0644"
+- name: Copy Helm tar.gz to master
+  copy:
+    src: "files/helm-v4.0.0-linux-amd64.tar.gz"
+    dest: "/tmp/helm.tar.gz"
+    mode: "0644"
 
-# - name: Extract Helm binary
-#   unarchive:
-#     src: "/tmp/helm.tar.gz"
-#     dest: "/tmp"
-#     remote_src: yes
-#     creates: "tmp/linux-amd64/helm"
+- name: Extract Helm binary
+  unarchive:
+    src: "/tmp/helm.tar.gz"
+    dest: "/tmp"
+    remote_src: yes
+    creates: "tmp/linux-amd64/helm"
 
-# - name: Move Helm binary to /usr/local/bin
-#   command: mv "/tmp/linux-amd64/helm" "/usr/local/bin/helm"
-#   args:
-#     creates: "/usr/local/bin/helm"
+- name: Move Helm binary to /usr/local/bin
+  command: mv "/tmp/linux-amd64/helm" "/usr/local/bin/helm"
+  args:
+    creates: "/usr/local/bin/helm"
 
-# - name: Ensure helm is executable
-#   file:
-#     path: "/usr/local/bin/helm"
-#     mode: "0755"
+- name: Ensure helm is executable
+  file:
+    path: "/usr/local/bin/helm"
+    mode: "0755"
 
-# - name: Verify Helm installation
-#   command: helm version
-#   register: helm_version
-#   changed_when: false
+- name: Verify Helm installation
+  command: helm version
+  register: helm_version
+  changed_when: false
 
-# - debug:
-#     var: helm_version.stdout
-
-
-# - name: Add Nginx Ingress repo 
-#   shell: |
-#     helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-
-# - name: Update Helm repos
-#   command: helm repo update
-
-# - name: Ensure Nginx Ingress Controller is installed
-#   shell: |
-#     if ! helm list -n ingress-nginx | grep -q '^{{ helm_release_name_nginx }}'; then
-#       helm upgrade --install {{ helm_release_name_nginx }} ingress-nginx/{{ helm_chart_nginx_name }} \
-#         --namespace ingress-nginx \
-#         --create-namespace \
-#         --wait \
-#         --timeout 10m \
-#         --set controller.service.type=NodePort \
-#         --set controller.service.nodePorts.http=30080 \
-#         --set controller.service.nodePorts.https=30443
-#     fi
-#   environment:
-#     KUBECONFIG: /etc/kubernetes/admin.conf
+- debug:
+    var: helm_version.stdout
 
 
-# - name: Add prometheus-community repo 
-#   shell: |
-#     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+- name: Add Nginx Ingress repo 
+  shell: |
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 
-# - name: Update Helm repos
-#   command: helm repo update
+- name: Update Helm repos
+  command: helm repo update
 
-# - name: Ensure kube-state-metrics is installed
-#   shell: |
-#     if ! helm list -n kube-state-metrics | grep -q '^{{ helm_release_name_ksm }}'; then
-#       helm upgrade --install {{ helm_release_name_ksm }} prometheus-community/{{ helm_chart_ksm_name }} \
-#         --namespace kube-state-metrics \
-#         --create-namespace \
-#         --wait \
-#         --timeout 10m
-#     fi
-#     environment:
-#       KUBECONFIG: /etc/kubernetes/admin.conf
+- name: Ensure Nginx Ingress Controller is installed
+  shell: |
+    if ! helm list -n ingress-nginx | grep -q '^{{ helm_release_name_nginx }}'; then
+      helm upgrade --install {{ helm_release_name_nginx }} ingress-nginx/{{ helm_chart_nginx_name }} \
+        --namespace ingress-nginx \
+        --create-namespace \
+        --wait \
+        --timeout 10m \
+        --set controller.service.type=NodePort \
+        --set controller.service.nodePorts.http=30080 \
+        --set controller.service.nodePorts.https=30443
+    fi
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+
+- name: Add prometheus-community repo 
+  shell: |
+    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
+- name: Update Helm repos
+  command: helm repo update
+
+- name: Ensure kube-state-metrics is installed
+  shell: |
+    if ! helm list -n kube-state-metrics | grep -q '^{{ helm_release_name_ksm }}'; then
+      helm upgrade --install {{ helm_release_name_ksm }} prometheus-community/{{ helm_chart_ksm_name }} \
+        --namespace kube-state-metrics \
+        --create-namespace \
+        --wait \
+        --timeout 10m
+    fi
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
 
 - name: Copy ingress manifest
   copy:
@@ -84,6 +84,17 @@
       kubectl apply -f /tmp/ksm-ingress.yml
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Apply ingress manifest
+  shell: |
+       kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.clusterIP}'
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ingress_ip_raw
+
+- name: Trim ingress ip
+  set_fact:
+    ingress_ip: "{{ ingress_ip_raw.stdout | trim }}"
 
 - name: Install NGINX
   package:
@@ -105,7 +116,7 @@
           error_log /var/log/nginx/arvan_error.log;
 
           location / {
-              proxy_pass http://{{ backend_ip }}:{{ backend_port }};
+              proxy_pass http://{{ ingress_ip }}:{{ backend_port }};
               proxy_set_header Host $host;
               proxy_set_header X-Real-IP $remote_addr;
               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

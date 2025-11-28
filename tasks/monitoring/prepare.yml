@@ -53,11 +53,12 @@
     owner: root
     group: root
 
+- name: Add ksm record
+  shell: |
+      echo "{{ rp_ip }} ksm.arvan.ir" >> /etc/hosts
+
 - name: Start monitoring stack
   command: podman-compose up -d
   args:
     chdir: "/srv/monitoring"
 
-- name: Apply ingress manifest
-  shell: |
-      echo "{{ lb_ip }}  ksm.arvan.ir" >> /etc/hosts
