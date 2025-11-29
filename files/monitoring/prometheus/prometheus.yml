@@ -27,3 +27,11 @@ scrape_configs:
         labels:
           zone: "arvancluster"
 
+###################################################
+#           Flask App Metrics                     #
+# #################################################
+  - job_name: flask-app-metrics
+    scheme: http
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['locip.arvan.ir']

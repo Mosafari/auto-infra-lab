@@ -1,0 +1,27 @@
+# Script environment variables
+env:
+    DOCKER_IMAGE_NAME: iplocator
+    DOCKER_REGISTRY: docker.io/devotem
+name: Provision Infra
+  
+# Triggers
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+  
+jobs:
+    build-and-push-landing-page:
+      name: Provision Infra
+      runs-on: self-hosted
+  
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
+        - name: Run play
+          run: |
+              ansible-playbook -i kubeinv.yml  kubeplay.yml --user ${{ secrets.K8S_USER }}  --private-key ${{ secrets.K8S_USER_KEY }}
