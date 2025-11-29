@@ -1,7 +1,3 @@
-# Script environment variables
-env:
-    DOCKER_IMAGE_NAME: iplocator
-    DOCKER_REGISTRY: docker.io/devotem
 name: Provision Infra
   
 # Triggers
