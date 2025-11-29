@@ -20,4 +20,4 @@ jobs:
 
         - name: Run play
           run: |
-              ansible-playbook -i kubeinv.yml  kubeplay.yml --user ${{ secrets.K8S_USER }} 
+              ansible-playbook -i kubeinv.yml  kubeplay.yml -u ${{ secrets.K8S_USER }}  --private-key ${{ secrets.K8S_USER_KEY }}
