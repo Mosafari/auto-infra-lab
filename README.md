@@ -48,7 +48,7 @@ There are also three default dashboards:
 
 I also installed a reverse proxy on the master node to redirect every request with certain domain names to my cluster.
 
-‼️ Yes, I know this is similar to MetalLB — **IT'S JUST A LAB!!!**
+‼️ Yeah I didn't use MetalLB — **IT'S JUST A LAB!!!**
 
 ---
 
