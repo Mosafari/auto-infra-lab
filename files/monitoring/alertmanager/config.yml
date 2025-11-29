@@ -1,12 +1,12 @@
-# global:
-#   resolve_timeout: 5m
+global:
+  resolve_timeout: 1m
+  slack_api_url: 'https://hooks.slack.com/services/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'
 
-#route:
-#  receiver: "my-webhook"
+route:
+  receiver: 'slack-notifications'
 
-# receivers:
-#   - name: "my-webhook"
-#     webhook_configs:
-#       - url: "http://alertserver.notyet"
-#         send_resolved: true
-
+receivers:
+- name: 'slack-notifications'
+  slack_configs:
+  - channel: '#infra-monitoring'
+    send_resolved: true

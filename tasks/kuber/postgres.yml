@@ -1,0 +1,52 @@
+---
+- name: Add postgres-operator repo 
+  shell: |
+    helm repo add postgres-operator-charts https://opensource.zalando.com/postgres-operator/charts/postgres-operator
+
+- name: Update Helm repos
+  command: helm repo update
+
+- name: Ensure postgres-operator is installed
+  shell: |
+    if ! helm list -n postgres-cluster | grep -q '^postgres-operator'; then
+      helm upgrade --install postgres-operator postgres-operator-charts/postgres-operator \
+        --namespace postgres-cluster \
+        --create-namespace \
+        --wait \
+        --timeout 10m
+    fi
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: copy local-path-provisioner manifest
+  template:
+    src: files/local-path-storage.yaml
+    dest: /tmp/local-path-storage.yaml
+
+- name: Apply local-path-provisioner manifest
+  shell: |
+      kubectl apply -f /tmp/local-path-storage.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: copy postgress pvc
+  template:
+    src: files/acid_pvc_postgres.yml
+    dest: /tmp/acid_pvc_postgres.yml
+
+- name: Apply postgress pvc
+  shell: |
+      kubectl apply -f /tmp/acid_pvc_postgres.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: copy postgress manifest
+  template:
+    src: files/postgres-cluster-manifest.yml
+    dest: /tmp/postgres-cluster-manifest.yml
+
+- name: Apply postgress manifest
+  shell: |
+      kubectl apply -f /tmp/postgres-cluster-manifest.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

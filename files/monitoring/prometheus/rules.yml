@@ -136,3 +136,11 @@ groups:
           summary: "High filesystem usage for {{ $labels.namespace }}/{{ $labels.pod }}"
           description: "Filesystem usage > 90% for more than 5m. Consider cleaning temporary files or increasing storage."    
 
+      - alert: PodNotReady
+        expr: kube_pod_status_ready{condition="false"} > 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is not ready"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 30 seconds."
