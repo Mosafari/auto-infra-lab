@@ -1,12 +1,12 @@
 ---
 - name: deploying arvan cluster
-   hosts: cluster
-   become: true
-   handlers:
-     - import_tasks: handlers/main.yml
-   tasks:
-     - name: Run Kubernetes setup
-       import_tasks: tasks/kuber/main.yml
+  hosts: cluster
+  become: true
+  handlers:
+    - import_tasks: handlers/main.yml
+  tasks:
+    - name: Run Kubernetes setup
+      import_tasks: tasks/kuber/main.yml
 
 - name: Install Helm charts and deploy apps
   hosts: masters
@@ -50,5 +50,6 @@
     - name: Prepare Monitoring server
 
       import_tasks: tasks/kuber/postgres.yml
+
 
 
