@@ -1,5 +1,5 @@
 ---
- - name: deploying arvan cluster
+- name: deploying arvan cluster
    hosts: cluster
    become: true
    handlers:
@@ -50,4 +50,5 @@
     - name: Prepare Monitoring server
 
       import_tasks: tasks/kuber/postgres.yml
+
 
